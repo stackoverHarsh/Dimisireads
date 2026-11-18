@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -19,6 +20,33 @@ export async function generateStaticParams() {
   return COLLECTIONS_SEED.map((col) => ({
     slug: col.slug,
   }));
+}
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://dimisireads.com';
+
+export async function generateMetadata({ params }: CollectionDetailPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const col = COLLECTIONS_SEED.find((c) => c.slug === slug);
+  if (!col) return { title: 'Collection Not Found — DimisiReads' };
+
+  const title = `${col.title} — Curated by ${col.curatorName} | DimisiReads`;
+  const description = col.description;
+  const url = `${BASE_URL}/collections/${slug}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: 'DimisiReads',
+      type: 'website',
+      images: col.bannerImageUrl ? [{ url: col.bannerImageUrl }] : [],
+    },
+    twitter: { card: 'summary_large_image', title, description, images: col.bannerImageUrl ? [col.bannerImageUrl] : [] },
+  };
 }
 
 export default async function CollectionDetailPage({ params }: CollectionDetailPageProps) {

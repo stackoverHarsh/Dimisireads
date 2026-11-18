@@ -45,7 +45,14 @@ export class LicensingError extends AppError {
 }
 
 export function handleApiError(error: unknown): NextResponse {
-  console.error('[API Error caught]:', error);
+  // Only log full error details in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('[API Error caught]:', error);
+  } else {
+    // Log a sanitized message in production — no stack traces, no internal details
+    const code = error instanceof AppError ? error.code : 'UNKNOWN_ERROR';
+    console.error(`[API Error] code=${code}`);
+  }
 
   if (error instanceof ZodError) {
     const formatted = error.errors.map((e) => ({

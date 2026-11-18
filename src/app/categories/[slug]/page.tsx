@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -19,6 +20,26 @@ export async function generateStaticParams() {
   return CATEGORIES_SEED.map((cat) => ({
     slug: cat.slug,
   }));
+}
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://dimisireads.com';
+
+export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const category = CATEGORIES_SEED.find((c) => c.slug === slug);
+  if (!category) return { title: 'Category Not Found — DimisiReads' };
+
+  const title = `${category.name} Books — DimisiReads`;
+  const description = category.description;
+  const url = `${BASE_URL}/categories/${slug}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, siteName: 'DimisiReads', type: 'website' },
+    twitter: { card: 'summary', title, description },
+  };
 }
 
 export default async function CategoryDetailPage({ params }: CategoryPageProps) {

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -30,6 +31,46 @@ interface BookDetailPageProps {
   }>;
 }
 
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://dimisireads.com';
+
+export async function generateMetadata({ params }: BookDetailPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const book = BOOKS_SEED.find((b) => b.slug === slug);
+
+  if (!book) {
+    return { title: 'Book Not Found — DimisiReads' };
+  }
+
+  const title = `${book.title} by ${book.author} — DimisiReads`;
+  const description = book.description;
+  const url = `${BASE_URL}/books/${book.slug}`;
+  const image = book.coverImageUrl ?? `${BASE_URL}/og-default.jpg`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: 'DimisiReads',
+      images: [{ url: image, width: 800, height: 1200, alt: `${book.title} cover` }],
+      type: 'book',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [image],
+    },
+    other: {
+      'book:author': book.author,
+      'book:isbn': book.isbn13,
+    },
+  };
+}
+
 export async function generateStaticParams() {
   return BOOKS_SEED.map((b) => ({
     slug: b.slug,
@@ -50,6 +91,35 @@ export default async function BookDetailPage({ params }: BookDetailPageProps) {
 
   return (
     <div className="relative min-h-screen text-espresso-950 dark:text-cream-50 overflow-x-hidden">
+      {/* JSON-LD Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'Book',
+            name: book.title,
+            alternativeHeadline: book.subtitle,
+            author: { '@type': 'Person', name: book.author },
+            isbn: book.isbn13,
+            numberOfPages: book.pageCount,
+            inLanguage: book.language,
+            publisher: book.publisher,
+            datePublished: String(book.publishedYear),
+            description: book.description,
+            image: book.coverImageUrl,
+            url: `${BASE_URL}/books/${book.slug}`,
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: book.averageRating,
+              reviewCount: book.ratingsCount,
+              bestRating: 5,
+            },
+            genre: book.category,
+            keywords: book.tags.join(', '),
+          }),
+        }}
+      />
       <AmbientDustMotes particleCount={35} />
       <Navbar />
 
