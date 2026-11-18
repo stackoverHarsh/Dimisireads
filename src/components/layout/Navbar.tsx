@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Library,
@@ -14,15 +14,49 @@ import {
   Compass,
   BookmarkCheck,
   Feather,
+  User,
+  LogOut,
+  ShieldCheck,
+  ChevronDown,
 } from 'lucide-react';
 import { CommandSearchModal } from '@/components/books/CommandSearchModal';
 import { cn } from '@/lib/utils';
 
+interface CurrentUser {
+  id: string;
+  email: string;
+  fullName: string;
+  username: string;
+  roles: string[];
+}
+
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  // Fetch session status
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data?.user) {
+            setCurrentUser(data.data.user);
+          }
+        }
+      } catch {
+        // Not authenticated
+      }
+    };
+
+    fetchUser();
+  }, [pathname]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -32,6 +66,18 @@ export const Navbar: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      setCurrentUser(null);
+      setUserDropdownOpen(false);
+      router.push('/');
+      router.refresh();
+    } catch {
+      // Ignore
+    }
+  };
+
   const navLinks = [
     { name: 'Home', href: '/' },
     { name: 'Explore', href: '/explore', icon: Compass },
@@ -40,6 +86,8 @@ export const Navbar: React.FC = () => {
     { name: 'Free E-Books', href: '/free-ebooks', icon: BookmarkCheck, badge: 'Verified' },
     { name: 'About', href: '/about' },
   ];
+
+  const isAdmin = currentUser?.roles.some((r) => r === 'SUPER_ADMIN' || r === 'CONTENT_MANAGER');
 
   return (
     <>
@@ -109,19 +157,97 @@ export const Navbar: React.FC = () => {
               className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-warm-oak-300/40 dark:border-candle-gold-500/20 bg-cream-50/80 dark:bg-espresso-900/80 text-xs text-warm-oak-700 dark:text-cream-300 hover:border-candle-gold-500 transition-colors shadow-sm cursor-pointer"
             >
               <Search className="w-3.5 h-3.5 text-candle-gold-500" />
-              <span className="hidden sm:inline">Search library...</span>
+              <span className="hidden sm:inline">Search...</span>
               <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-mono rounded bg-warm-oak-200/50 dark:bg-espresso-800 text-warm-oak-600 dark:text-cream-300">
                 ⌘K
               </kbd>
             </button>
 
-            {/* Start Reading / Login CTA */}
-            <Link href="/explore" className="hidden sm:inline-flex">
-              <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-burgundy-700 hover:bg-burgundy-800 text-cream-50 font-sans text-xs font-semibold tracking-wide shadow-burgundy-glow transition-all active:scale-95 cursor-pointer">
-                <BookOpen className="w-3.5 h-3.5 text-candle-gold-300" />
-                Start Reading
-              </span>
-            </Link>
+            {/* Authenticated User Menu OR Login / Start Reading Buttons */}
+            {currentUser ? (
+              <div className="relative">
+                <button
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-warm-oak-300/40 dark:border-candle-gold-500/30 bg-cream-100 dark:bg-espresso-900 text-xs font-semibold cursor-pointer shadow-sm hover:border-candle-gold-500 transition-colors"
+                >
+                  <div className="w-6 h-6 rounded-full bg-burgundy-700 text-cream-50 flex items-center justify-center font-serif text-xs font-bold shadow-xs">
+                    {currentUser.fullName.slice(0, 1)}
+                  </div>
+                  <span className="hidden sm:inline max-w-[100px] truncate text-warm-oak-900 dark:text-cream-100">
+                    {currentUser.fullName}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-warm-oak-500" />
+                </button>
+
+                {/* User Dropdown Menu */}
+                <AnimatePresence>
+                  {userDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                      className="absolute right-0 mt-2 w-52 rounded-2xl bg-cream-50 dark:bg-espresso-900 border border-warm-oak-300/40 dark:border-candle-gold-500/30 shadow-2xl p-2 z-50 text-xs"
+                    >
+                      <div className="px-3 py-2 border-b border-warm-oak-200/50 dark:border-espresso-800">
+                        <p className="font-bold text-burgundy-950 dark:text-cream-50 truncate">
+                          {currentUser.fullName}
+                        </p>
+                        <p className="text-[10px] text-warm-oak-500 dark:text-dusty-pink-300 truncate">
+                          @{currentUser.username}
+                        </p>
+                      </div>
+
+                      <div className="py-1 space-y-0.5">
+                        <Link
+                          href="/dashboard"
+                          onClick={() => setUserDropdownOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-cream-200/50 dark:hover:bg-espresso-800 text-warm-oak-800 dark:text-cream-200 font-semibold"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-candle-gold-500" />
+                          My Study / Dashboard
+                        </Link>
+
+                        {isAdmin && (
+                          <Link
+                            href="/admin"
+                            onClick={() => setUserDropdownOpen(false)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-cream-200/50 dark:hover:bg-espresso-800 text-candle-gold-700 dark:text-candle-gold-300 font-semibold"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-candle-gold-500" />
+                            Archivist Admin
+                          </Link>
+                        )}
+                      </div>
+
+                      <div className="pt-1 border-t border-warm-oak-200/50 dark:border-espresso-800">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-burgundy-900/10 text-burgundy-800 dark:text-dusty-pink-300 font-semibold cursor-pointer text-left"
+                        >
+                          <LogOut className="w-3.5 h-3.5 text-burgundy-700 dark:text-dusty-pink-300" />
+                          Sign Out of Sanctum
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/login"
+                  className="hidden sm:inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold text-warm-oak-800 dark:text-cream-200 hover:text-burgundy-900 transition-colors"
+                >
+                  Log In
+                </Link>
+                <Link href="/register" className="hidden sm:inline-flex">
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-burgundy-700 hover:bg-burgundy-800 text-cream-50 font-sans text-xs font-semibold tracking-wide shadow-burgundy-glow transition-all active:scale-95 cursor-pointer">
+                    <BookOpen className="w-3.5 h-3.5 text-candle-gold-300" />
+                    Start Reading
+                  </span>
+                </Link>
+              </div>
+            )}
 
             {/* Mobile Hamburger Button */}
             <button
@@ -169,22 +295,44 @@ export const Navbar: React.FC = () => {
               ))}
 
               <div className="pt-4 flex flex-col gap-2.5">
-                <Link
-                  href="/explore"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-burgundy-700 text-cream-50 text-xs font-semibold shadow-burgundy-glow"
-                >
-                  <BookOpen className="w-4 h-4 text-candle-gold-300" />
-                  Explore The Collection
-                </Link>
-                <Link
-                  href="/design-system"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-warm-oak-400/40 dark:border-candle-gold-500/30 text-xs font-semibold text-warm-oak-800 dark:text-cream-200"
-                >
-                  <Feather className="w-3.5 h-3.5 text-candle-gold-500" />
-                  Design System Showcase
-                </Link>
+                {currentUser ? (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-burgundy-700 text-cream-50 text-xs font-semibold shadow-burgundy-glow"
+                    >
+                      <BookOpen className="w-4 h-4 text-candle-gold-300" />
+                      My Study / Dashboard
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-warm-oak-400/40 text-xs font-semibold text-burgundy-800 dark:text-dusty-pink-300"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-burgundy-700 text-cream-50 text-xs font-semibold shadow-burgundy-glow"
+                    >
+                      <User className="w-4 h-4 text-candle-gold-300" />
+                      Log In to Sanctum
+                    </Link>
+                    <Link
+                      href="/register"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-warm-oak-400/40 dark:border-candle-gold-500/30 text-xs font-semibold text-warm-oak-800 dark:text-cream-200"
+                    >
+                      <Feather className="w-3.5 h-3.5 text-candle-gold-500" />
+                      Register New Account
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
           </motion.div>
