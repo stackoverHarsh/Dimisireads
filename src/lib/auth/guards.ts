@@ -36,7 +36,12 @@ export async function requireRole(allowedRoles: UserRoleType[], callbackUrl?: st
 
 export async function requireAdmin(callbackUrl?: string) {
   return requireRole(
-    [UserRoleType.SUPER_ADMIN, UserRoleType.CONTENT_MANAGER],
+    [
+      UserRoleType.SUPER_ADMIN,
+      UserRoleType.CONTENT_MANAGER,
+      UserRoleType.MODERATOR,
+      UserRoleType.SUPPORT_ADMIN,
+    ],
     callbackUrl
   );
 }
