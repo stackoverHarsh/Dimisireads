@@ -1,0 +1,115 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300..800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-burgundy: #722F37;
+  --color-cream: #F8F4E7;
+  --color-dusty-pink: #D7A7B1;
+  --color-espresso: #1C1417;
+  --color-candle-gold: #D9A760;
+  --color-warm-oak: #4A2E20;
+
+  --background: #F8F4E7;
+  --foreground: #1C1417;
+  --card-bg: #FFFFFF;
+  --card-border: rgba(215, 167, 177, 0.25);
+  --shelf-wood: #4A2E20;
+
+  --font-playfair: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+  --font-jakarta: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-lora: 'Lora', 'Merriweather', Georgia, serif;
+}
+
+[data-theme="espresso"] {
+  --background: #1C1417;
+  --foreground: #F8F4E7;
+  --card-bg: #261F21;
+  --card-border: rgba(217, 167, 96, 0.2);
+  --shelf-wood: #3B241A;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-jakarta);
+  overflow-x: hidden;
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Paper grain overlay generator */
+.paper-grain {
+  background-image: radial-gradient(rgba(74, 46, 32, 0.04) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+[data-theme="espresso"] .paper-grain {
+  background-image: radial-gradient(rgba(217, 167, 96, 0.05) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+/* Atmospheric Library Glow Utilities */
+.glow-gold {
+  box-shadow: 0 0 25px -4px rgba(217, 167, 96, 0.4), 0 0 10px -2px rgba(217, 167, 96, 0.25);
+}
+
+.glow-gold-lg {
+  box-shadow: 0 0 45px -4px rgba(217, 167, 96, 0.6), 0 0 20px -2px rgba(217, 167, 96, 0.35);
+}
+
+.glow-rose {
+  box-shadow: 0 0 25px -4px rgba(215, 167, 177, 0.45);
+}
+
+.glow-burgundy {
+  box-shadow: 0 0 30px -4px rgba(114, 47, 55, 0.45);
+}
+
+/* Bookshelf Mahogany Wood Texture */
+.wood-shelf {
+  background: linear-gradient(180deg, #5E3B2A 0%, #4A2E20 50%, #3B241A 100%);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.15), 0 15px 25px rgba(28, 20, 23, 0.5);
+  border-bottom: 6px solid #23140E;
+}
+
+/* Deckle Edge / Old Paper Page Simulation */
+.deckle-edge {
+  box-shadow: inset -2px 0 5px rgba(0, 0, 0, 0.08), 2px 2px 6px rgba(0, 0, 0, 0.15);
+  border-right: 2px dashed rgba(215, 167, 177, 0.4);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(28, 20, 23, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(114, 47, 55, 0.35);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(114, 47, 55, 0.6);
+}
+
+/* Accessibility: Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

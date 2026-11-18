@@ -1,0 +1,761 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. ENUMS
+// ==========================================
+
+enum UserRoleType {
+  SUPER_ADMIN
+  CONTENT_MANAGER
+  MODERATOR
+  SUPPORT_ADMIN
+  USER
+}
+
+enum LicenceCategory {
+  PUBLIC_DOMAIN                  // Life + 70 years / verified historical works
+  DIMISI_OWNED                   // Proprietary publications / originals
+  EXPLICIT_DISTRIBUTION_GRANTED  // Formal contract with rights holder
+  OPEN_PERMISSIVE                // Creative Commons, CC0, Project Gutenberg, etc.
+}
+
+enum LicenceVerificationStatus {
+  DRAFT
+  UNDER_LEGAL_REVIEW
+  VERIFIED_ACTIVE
+  REJECTED
+  REVOKED
+  EXPIRED
+}
+
+enum EbookFormat {
+  EPUB
+  PDF
+  MOBI
+  AUDIO_MP3
+}
+
+enum ReadingStatus {
+  WANT_TO_READ
+  CURRENTLY_READING
+  COMPLETED
+  ON_HOLD
+  DROPPED
+}
+
+enum HighlightColor {
+  AMBER_GOLD
+  ROSE_QUARTZ
+  SAGE_LINEN
+  LAVENDER_MIST
+}
+
+enum ReviewStatus {
+  PENDING_MODERATION
+  PUBLISHED
+  FLAGGED
+  REMOVED
+}
+
+enum ReportReason {
+  SPOILER_UNMARKED
+  OFFENSIVE_LANGUAGE
+  HARASSMENT
+  SPAM_OR_ADVERTISING
+  COPYRIGHT_CONCERN
+  OTHER
+}
+
+enum GoalFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum NotificationType {
+  STREAK_REMINDER
+  ACHIEVEMENT_UNLOCKED
+  GOAL_COMPLETED
+  NEW_BOOK_RELEASE
+  REVIEW_REACTION
+  LEGAL_NOTICE
+  SYSTEM_ANNOUNCEMENT
+}
+
+// ==========================================
+// 2. AUTHENTICATION & ACCESS CONTROL
+// ==========================================
+
+model User {
+  id                   String           @id @default(uuid())
+  email                String           @unique
+  passwordHash         String?
+  fullName             String
+  username             String           @unique
+  avatarUrl            String?
+  bio                  String?          @db.Text
+  isEmailVerified      Boolean          @default(false)
+  emailVerifiedAt      DateTime?
+  isActive             Boolean          @default(true)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  lastLoginAt          DateTime?
+
+  // RBAC Relations
+  roles                UserRole[]
+  sessions             Session[]
+  accounts             Account[]
+
+  // Library & Reading Relations
+  savedBooks           SavedBook[]
+  readingLists         ReadingList[]
+  readingProgress      ReadingProgress[]
+  bookmarks            Bookmark[]
+  highlights           Highlight[]
+  notes                Note[]
+
+  // Community
+  reviews              Review[]
+  reviewReportsFiled   ReviewReport[]   @relation("UserReportsFiled")
+  downloadRecords      DownloadRecord[]
+
+  // Engagement & Gamification
+  readingGoals         ReadingGoal[]
+  userAchievements     UserAchievement[]
+  readingStreak        ReadingStreak?
+  notifications        Notification[]
+
+  // Referrals
+  referralsMade        Referral[]       @relation("ReferrerUser")
+  referralsReceived    Referral[]       @relation("ReferredUser")
+  referralRewards      ReferralReward[]
+
+  // Admin Logs
+  adminActivities      AdminActivityLog[]
+  licenceAudits        EbookLicence[]   @relation("LicenceAuditor")
+
+  @@index([email])
+  @@index([username])
+}
+
+model Account {
+  id                 String    @id @default(uuid())
+  userId             String
+  provider           String    // "credentials", "google", "github"
+  providerAccountId  String
+  refreshToken       String?   @db.Text
+  accessToken        String?   @db.Text
+  expiresAt          Int?
+  tokenType          String?
+  scope              String?
+  idToken            String?   @db.Text
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  sessionToken String    @unique
+  ipAddress    String?
+  userAgent    String?   @db.Text
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        UserRoleType     @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  permissions RolePermission[]
+  users       UserRole[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  slug        String           @unique // e.g. "ebook:download", "catalogue:edit", "licence:verify"
+  description String?
+  createdAt   DateTime         @default(now())
+
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+// ==========================================
+// 3. BIBLIOGRAPHIC CATALOGUE (METADATA ONLY)
+// ==========================================
+
+model Book {
+  id                 String           @id @default(uuid())
+  slug               String           @unique
+  title              String
+  subtitle           String?
+  originalTitle      String?
+  isbn10             String?          @unique
+  isbn13             String?          @unique
+  googleBooksId      String?          @unique
+  openLibraryId      String?          @unique
+  description        String?          @db.Text
+  coverImageUrl      String?
+  thumbnailUrl       String?
+  publisher          String?
+  publishedYear      Int?
+  publishedDate      String?
+  pageCount          Int?
+  language           String           @default("en")
+  averageRating      Decimal          @default(0.00) @db.Decimal(3, 2)
+  ratingsCount       Int              @default(0)
+  vibeScoreData      Json?            // e.g. {"cozy": 92, "scholarly": 88, "vibe": "Rainy Day in Oxford"}
+  isFeatured         Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  // Bibliographic relations
+  authors            BookAuthor[]
+  categories         BookCategory[]
+  tags               BookTag[]
+
+  // Separation of Concerns: Digital Inventory
+  ebook              Ebook?
+
+  // Personal Library & Social
+  savedBy            SavedBook[]
+  readingListEntries ReadingListBook[]
+  readingProgress    ReadingProgress[]
+  bookmarks          Bookmark[]
+  highlights         Highlight[]
+  notes              Note[]
+  reviews            Review[]
+  collectionEntries  CollectionBook[]
+
+  @@index([slug])
+  @@index([title])
+  @@index([isbn13])
+  @@index([isFeatured])
+}
+
+model Author {
+  id             String       @id @default(uuid())
+  slug           String       @unique
+  name           String
+  birthYear      Int?
+  deathYear      Int?         // Crucial for Public Domain verification (Life + 70)
+  biography      String?      @db.Text
+  photoUrl       String?
+  nationality    String?
+  openLibraryKey String?      @unique
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  books          BookAuthor[]
+
+  @@index([name])
+}
+
+model BookAuthor {
+  bookId    String
+  authorId  String
+  role      String?   @default("Author")
+  order     Int       @default(0)
+
+  book      Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  author    Author    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, authorId])
+}
+
+model Category {
+  id          String         @id @default(uuid())
+  name        String         @unique
+  slug        String         @unique
+  description String?
+  icon        String?
+  createdAt   DateTime       @default(now())
+
+  books       BookCategory[]
+
+  @@index([slug])
+}
+
+model BookCategory {
+  bookId     String
+  categoryId String
+
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, categoryId])
+}
+
+model Tag {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+
+  books     BookTag[]
+
+  @@index([slug])
+}
+
+model BookTag {
+  bookId String
+  tagId  String
+
+  book   Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, tagId])
+}
+
+// ==========================================
+// 4. LICENSED DIGITAL INVENTORY & ASSETS
+// ==========================================
+
+model Ebook {
+  id                  String           @id @default(uuid())
+  bookId              String           @unique
+  format              EbookFormat      @default(EPUB)
+  s3StorageKey        String           // Private object key in S3/R2 (never public)
+  fileSizeBytes       BigInt
+  fileSha256Checksum  String           @unique // Cryptographic hash for tamper detection
+  drmFreeNotice       String?          @db.Text
+  isDownloadAllowed   Boolean          @default(true)
+  isOnlineReadAllowed Boolean          @default(true)
+  downloadCount       Int              @default(0)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  book                Book             @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  licence             EbookLicence?
+  downloadRecords     DownloadRecord[]
+
+  @@index([bookId])
+}
+
+model EbookLicence {
+  id                    String                    @id @default(uuid())
+  ebookId               String                    @unique
+  category              LicenceCategory
+  verificationStatus    LicenceVerificationStatus @default(DRAFT)
+  licenceDocumentUrl    String?                   // S3 key to signed proof or public domain evidence
+  licensorName          String?                   // e.g. "Project Gutenberg", "Author Estate", "DIMISI Tech"
+  licensorContactEmail  String?
+  licenceAgreementRef   String?                   // Contract number or legal reference
+  territorialRights     String                    @default("WORLDWIDE")
+  validFrom             DateTime                  @default(now())
+  validUntil            DateTime?                 // Nullable for perpetual / public domain
+  legalNotes            String?                   @db.Text
+  verifiedAt            DateTime?
+  verifiedByUserId      String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  ebook                 Ebook                     @relation(fields: [ebookId], references: [id], onDelete: Cascade)
+  verifiedByUser        User?                     @relation("LicenceAuditor", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([verificationStatus])
+  @@index([category])
+}
+
+model DownloadRecord {
+  id           String    @id @default(uuid())
+  ebookId      String
+  userId       String
+  ipAddress    String?
+  userAgent    String?   @db.Text
+  downloadedAt DateTime  @default(now())
+
+  ebook        Ebook     @relation(fields: [ebookId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ebookId])
+  @@index([userId])
+}
+
+// ==========================================
+// 5. COMMUNITY & REVIEWS
+// ==========================================
+
+model Review {
+  id              String         @id @default(uuid())
+  bookId          String
+  userId          String
+  rating          Int            // 1 to 5 stars
+  headline        String?
+  content         String         @db.Text
+  containsSpoiler Boolean        @default(false)
+  status          ReviewStatus   @default(PUBLISHED)
+  upvotesCount    Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  book            Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports         ReviewReport[]
+
+  @@unique([bookId, userId])
+  @@index([bookId])
+  @@index([userId])
+  @@index([status])
+}
+
+model ReviewReport {
+  id          String       @id @default(uuid())
+  reviewId    String
+  reporterId  String
+  reason      ReportReason
+  details     String?      @db.Text
+  isResolved  Boolean      @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+
+  review      Review       @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporter    User         @relation("UserReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+  @@index([isResolved])
+}
+
+// ==========================================
+// 6. PERSONAL LIBRARY, PROGRESS & READER
+// ==========================================
+
+model SavedBook {
+  id        String        @id @default(uuid())
+  userId    String
+  bookId    String
+  status    ReadingStatus @default(WANT_TO_READ)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([userId, status])
+}
+
+model ReadingList {
+  id          String            @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  books       ReadingListBook[]
+
+  @@index([userId])
+}
+
+model ReadingListBook {
+  readingListId String
+  bookId        String
+  order         Int         @default(0)
+  addedAt       DateTime    @default(now())
+
+  readingList   ReadingList @relation(fields: [readingListId], references: [id], onDelete: Cascade)
+  book          Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@id([readingListId, bookId])
+}
+
+model ReadingProgress {
+  id                  String    @id @default(uuid())
+  userId              String
+  bookId              String
+  progressPercentage  Decimal   @default(0.00) @db.Decimal(5, 2)
+  cfiLocation         String?   // EPUB Canonical Fragment Identifier
+  currentChapterTitle String?
+  currentPage         Int?
+  totalPages          Int?
+  secondsSpentReading Int       @default(0)
+  lastReadAt          DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book                Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([userId])
+}
+
+model Bookmark {
+  id          String   @id @default(uuid())
+  userId      String
+  bookId      String
+  cfiLocation String
+  label       String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book        Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+model Highlight {
+  id           String         @id @default(uuid())
+  userId       String
+  bookId       String
+  cfiRange     String
+  selectedText String         @db.Text
+  color        HighlightColor @default(AMBER_GOLD)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book         Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  notes        Note[]
+
+  @@index([userId, bookId])
+}
+
+model Note {
+  id          String     @id @default(uuid())
+  userId      String
+  bookId      String
+  highlightId String?
+  content     String     @db.Text
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book        Book       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  highlight   Highlight? @relation(fields: [highlightId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+// ==========================================
+// 7. CURATED EDITORIAL COLLECTIONS
+// ==========================================
+
+model Collection {
+  id             String           @id @default(uuid())
+  title          String
+  slug           String           @unique
+  description    String?          @db.Text
+  bannerImageUrl String?
+  curatorName    String           @default("The Dimisi Curators")
+  isFeatured     Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  books          CollectionBook[]
+
+  @@index([slug])
+  @@index([isFeatured])
+}
+
+model CollectionBook {
+  collectionId String
+  bookId       String
+  curatorNote  String?  @db.Text
+  order        Int      @default(0)
+
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  book         Book       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, bookId])
+}
+
+// ==========================================
+// 8. ENGAGEMENT & GAMIFICATION
+// ==========================================
+
+model ReadingGoal {
+  id             String        @id @default(uuid())
+  userId         String
+  year           Int
+  frequency      GoalFrequency @default(YEARLY)
+  targetBooks    Int           @default(12)
+  completedBooks Int           @default(0)
+  isCompleted    Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year, frequency])
+  @@index([userId])
+}
+
+model Achievement {
+  id          String            @id @default(uuid())
+  code        String            @unique
+  title       String
+  description String
+  badgeIcon   String
+  secret      Boolean           @default(false)
+  points      Int               @default(10)
+  createdAt   DateTime          @default(now())
+
+  users       UserAchievement[]
+
+  @@index([code])
+}
+
+model UserAchievement {
+  userId        String
+  achievementId String
+  unlockedAt    DateTime    @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@id([userId, achievementId])
+}
+
+model ReadingStreak {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  currentStreakDays Int       @default(0)
+  longestStreakDays Int       @default(0)
+  lastReadingDate   DateTime? @db.Date
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  actionUrl String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+// ==========================================
+// 9. MARKETING & REFERRALS (COMPLIANT)
+// ==========================================
+
+model NewsletterSubscriber {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  isSubscribed   Boolean   @default(true)
+  source         String?   @default("homepage")
+  subscribedAt   DateTime  @default(now())
+  unsubscribedAt DateTime?
+
+  @@index([email])
+}
+
+model Referral {
+  id             String    @id @default(uuid())
+  referrerUserId String
+  referredUserId String    @unique
+  referralCode   String
+  isQualified    Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  referrerUser   User      @relation("ReferrerUser", fields: [referrerUserId], references: [id], onDelete: Cascade)
+  referredUser   User      @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  @@index([referrerUserId])
+  @@index([referralCode])
+}
+
+model ReferralReward {
+  id        String   @id @default(uuid())
+  userId    String
+  points    Int      @default(50)
+  reason    String
+  claimedAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Campaign {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  bannerText  String?
+  targetVibe  String?
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ==========================================
+// 10. AUDIT & ADMINISTRATION
+// ==========================================
+
+model AdminActivityLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  admin      User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([entityType, entityId])
+}

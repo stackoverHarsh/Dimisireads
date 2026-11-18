@@ -1,0 +1,41 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
+  NEXT_PUBLIC_APP_NAME: z.string().default('DimisiReads'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  COOKIE_DOMAIN: z.string().default('localhost'),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+  GOOGLE_BOOKS_API_KEY: z.string().optional().default(''),
+  OPEN_LIBRARY_API_BASE: z.string().url().default('https://openlibrary.org'),
+  S3_ENDPOINT: z.string().optional().default('https://example.r2.cloudflarestorage.com'),
+  S3_REGION: z.string().default('auto'),
+  S3_ACCESS_KEY_ID: z.string().optional().default('dev_key'),
+  S3_SECRET_ACCESS_KEY: z.string().optional().default('dev_secret'),
+  S3_BUCKET_NAME: z.string().default('dimisireads-licensed-vault'),
+  S3_FORCE_PATH_STYLE: z.string().default('true'),
+  GEMINI_API_KEY: z.string().optional().default(''),
+});
+
+export const env = envSchema.parse({
+  NODE_ENV: process.env.NODE_ENV,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
+  DATABASE_URL: process.env.DATABASE_URL,
+  SESSION_SECRET: process.env.SESSION_SECRET,
+  JWT_SECRET: process.env.JWT_SECRET,
+  COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
+  REDIS_URL: process.env.REDIS_URL,
+  GOOGLE_BOOKS_API_KEY: process.env.GOOGLE_BOOKS_API_KEY,
+  OPEN_LIBRARY_API_BASE: process.env.OPEN_LIBRARY_API_BASE,
+  S3_ENDPOINT: process.env.S3_ENDPOINT,
+  S3_REGION: process.env.S3_REGION,
+  S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
+  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+  S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
+  S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+});
